@@ -307,10 +307,10 @@ export default function PaymentGateway() {
           <div className="text-center">
             <CheckCircle className="mx-auto h-12 w-12 text-green-500" />
             <h3 className="mt-2 text-lg font-medium text-gray-900">
-              Hoe Sold
+              Payment Successful!
             </h3>
             <p className="mt-1 text-sm text-gray-500">
-              Congratulations Cukiful! You cucked urself again!!
+              Your transaction was processed.
             </p>
             <button
               onClick={() => {
