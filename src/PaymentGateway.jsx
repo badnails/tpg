@@ -32,7 +32,7 @@ export default function PaymentGateway() {
   const getTrxDetails = async (trxID) => {
     try {
       const response = await fetch(
-        "http://test-project-production-88cc.up.railway.app/api/gateway/get-trx-details",
+        "https://test-project-production-88cc.up.railway.app/api/gateway/get-trx-details",
         {
           method: "GET",
           headers: {
@@ -57,7 +57,7 @@ export default function PaymentGateway() {
 
     try {
       const response = await fetch(
-        "http://test-project-production-88cc.up.railway.app/api/gateway/validate-user",
+        "https://test-project-production-88cc.up.railway.app/api/gateway/validate-user",
         {
           method: "GET",
           headers: {
@@ -91,7 +91,7 @@ export default function PaymentGateway() {
 
     try {
       const response = await fetch(
-        "http://test-project-production-88cc.up.railway.app/api/gateway/finalize-transaction",
+        "https://test-project-production-88cc.up.railway.app/api/gateway/finalize-transaction",
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
