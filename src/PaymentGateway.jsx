@@ -1,20 +1,18 @@
 import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { AlertCircle, CheckCircle, Loader } from "lucide-react";
 
-// Utility to get transaction ID from URL safely
-const getTransactionId = () => {
-  if (typeof window !== "undefined") {
-    const urlParams = new URLSearchParams(window.location.search);
-    return urlParams.get("transactionid");
-  }
-  return null;
-};
+// Configurable base URL
+const API_BASE_URL = "https://test-project-production-88cc.up.railway.app";
 
 export default function PaymentGateway() {
-  const [transactionId, setTransactionId] = useState("");
+  const [searchParams] = useSearchParams();
+  const transactionId = searchParams.get("transactionid");
+  const expType = searchParams.get("expType");
+
   const [username, setUsername] = useState("");
   const [pin, setPin] = useState("");
-  const [currentStep, setCurrentStep] = useState("username");
+  const [currentStep, setCurrentStep] = useState("error");
   const [transactionDetails, setTransactionDetails] = useState(null);
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -24,7 +22,6 @@ export default function PaymentGateway() {
     setUsername("");
     setPin("");
     setTransactionDetails(null);
-    setTransactionId("");
     setError("");
     setCurrentStep("username");
   };
@@ -32,23 +29,49 @@ export default function PaymentGateway() {
   const getTrxDetails = async (trxID) => {
     try {
       const response = await fetch(
-        "https://test-project-production-88cc.up.railway.app/api/gateway/get-trx-details",
+        `${API_BASE_URL}/api/gateway/get-trx-details/${trxID}/?expType=${expType}`,
         {
           method: "GET",
-          headers: {
-            "Content-Type": "application/json",
-            transactionid: trxID,
-          },
+          headers: { "Content-Type": "application/json" }
         }
       );
-
       const data = await response.json();
+      console.log(data);
       return data;
     } catch (err) {
-      console.error("Error fetching transaction details:", err);
-      return { valid: false, message: "Failed to load transaction data" };
+      console.log(err);
     }
   };
+
+  useEffect(() => {
+    const fetchTransaction = async () => {
+      if (!transactionId) {
+        setError("No transaction ID found in URL");
+        setCurrentStep("error");
+        return;
+      }
+
+      setIsLoading(true);
+      try {
+        const trxData = await getTrxDetails(transactionId);
+        if (!trxData.valid) {
+          setError(trxData.message || "Invalid transaction");
+          setCurrentStep("error");
+        } else {
+          setTransactionDetails(trxData);
+          setCurrentStep("username");
+        }
+      } catch (e) {
+        console.error(e);
+        setError("Transaction data could not be fetched");
+        setCurrentStep("error");
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchTransaction();
+  }, [transactionId, expType]);
 
   const validateUser = async (e) => {
     e.preventDefault();
@@ -56,21 +79,18 @@ export default function PaymentGateway() {
     setError("");
 
     try {
-      const response = await fetch(
-        "https://test-project-production-88cc.up.railway.app/api/gateway/validate-user",
-        {
-          method: "GET",
-          headers: {
-            "Content-Type": "application/json",
-            username: username,
-          },
-        }
-      );
+      const response = await fetch(`${API_BASE_URL}/api/gateway/validate-user`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username }),
+      });
 
       const data = await response.json();
       if (data.valid) {
-        setPin(""); // reset pin in case of retry
+        setPin("");
         setCurrentStep("pin");
+        sessionStorage.setItem("username", username);
+        sessionStorage.setItem("currentStep", "pin");
       } else {
         setError(data.message || "Invalid Username");
         setCurrentStep("error");
@@ -90,24 +110,19 @@ export default function PaymentGateway() {
     setError("");
 
     try {
-      const response = await fetch(
-        "https://test-project-production-88cc.up.railway.app/api/gateway/finalize-transaction",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            username: username,
-            password: pin,
-            transactionid: transactionId,
-          }),
-        }
-      );
+      const response = await fetch(`${API_BASE_URL}/api/gateway/finalize-transaction`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          username,
+          password: pin,
+          transactionid: transactionId,
+        }),
+      });
 
       const data = await response.json();
-      console.log(data);
-
       if (data.valid) {
-        sessionStorage.clear(); // clear session only on success
+        resetSession();
         setCurrentStep("success");
       } else {
         setError(data.message || "Invalid PIN");
@@ -120,160 +135,52 @@ export default function PaymentGateway() {
     }
   };
 
-  useEffect(() => {
-    const fetchTransaction = async () => {
-      const currentTxnId = getTransactionId();
-      const storedTxnId = sessionStorage.getItem("transactionId");
-
-      if (currentTxnId !== storedTxnId) {
-        resetSession();
-      }
-
-      if (currentTxnId) {
-        setIsLoading(true);
-        setError("");
-
-        try {
-          const trxData = await getTrxDetails(currentTxnId);
-
-          if (!trxData.valid) {
-            setError(trxData.message || "Invalid transaction");
-            setCurrentStep("error");
-          } else {
-            setTransactionId(currentTxnId);
-            setTransactionDetails(trxData);
-            sessionStorage.setItem("transactionId", currentTxnId);
-            sessionStorage.setItem(
-              "transactionDetails",
-              JSON.stringify(trxData)
-            );
-
-            const savedUsername = sessionStorage.getItem("username");
-            const savedStep = sessionStorage.getItem("currentStep");
-
-            if (savedUsername) setUsername(savedUsername);
-            if (savedStep) setCurrentStep(savedStep);
-          }
-        } catch (e) {
-          console.error(e);
-          setError("Transaction data could not be fetched");
-          setCurrentStep("error");
-        }
-
-        setIsLoading(false);
-      } else {
-        setError("No transaction ID found in URL");
-        setCurrentStep("error");
-      }
-    };
-
-    fetchTransaction();
-  }, []);
-
-  useEffect(() => {
-    const handleUrlChange = async () => {
-      const currentTxnId = getTransactionId();
-
-      if (!currentTxnId) {
-        setError("No transaction ID found in URL");
-        setCurrentStep("error");
-        return;
-      }
-
-      if (currentTxnId !== transactionId) {
-        setIsLoading(true);
-        try {
-          const trxData = await getTrxDetails(currentTxnId);
-          if (!trxData.valid) {
-            resetSession();
-            setError("Invalid transaction");
-            setCurrentStep("error");
-          } else {
-            setTransactionId(currentTxnId);
-            setTransactionDetails(trxData);
-            sessionStorage.setItem("transactionId", currentTxnId);
-            sessionStorage.setItem(
-              "transactionDetails",
-              JSON.stringify(trxData)
-            );
-          }
-        } catch (err) {
-          setError("Failed to fetch transaction");
-          setCurrentStep("error");
-          console.log(err);
-        } finally {
-          setIsLoading(false);
-        }
-      }
-    };
-
-    window.addEventListener("popstate", handleUrlChange);
-    return () => window.removeEventListener("popstate", handleUrlChange);
-  }, [transactionId]);
-
   const renderStep = () => {
     switch (currentStep) {
       case "username":
         return (
           <form onSubmit={validateUser} className="space-y-6">
             <div>
-              <label
-                htmlFor="username"
-                className="block text-sm font-medium text-gray-700"
-              >
+              <label htmlFor="username" className="block text-sm font-medium text-gray-700">
                 Username
               </label>
               <input
                 id="username"
                 type="text"
                 required
+                autoFocus
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
-                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring focus:border-blue-500"
+                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm"
               />
             </div>
             <button
               type="submit"
               disabled={isLoading}
-              className="w-full flex justify-center py-2 px-4 rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300"
+              className="w-full py-2 px-4 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md"
             >
-              {isLoading ? (
-                <Loader className="animate-spin h-5 w-5" />
-              ) : (
-                "Continue"
-              )}
+              {isLoading ? <Loader className="animate-spin h-5 w-5" /> : "Continue"}
             </button>
           </form>
         );
 
       case "pin":
-        if (!transactionDetails || !transactionDetails.transactionDetails) {
-          return (
-            <div className="text-center text-sm text-red-500">
-              Transaction details are missing or incomplete.
-            </div>
-          );
+        if (!transactionDetails?.transactionDetails) {
+          return <div className="text-center text-sm text-red-500">Transaction details missing.</div>;
         }
 
         return (
           <form onSubmit={completeTransaction} className="space-y-6">
             <div className="bg-gray-50 p-4 rounded-md mb-4">
-              <h3 className="text-sm font-medium text-gray-700">
-                Transaction Details
-              </h3>
+              <h3 className="text-sm font-medium text-gray-700">Transaction Details</h3>
               <div className="mt-2 text-sm text-gray-600">
-                <p>
-                  Amount: ${transactionDetails.transactionDetails.subamount}
-                </p>
+                <p>Amount: ${transactionDetails.transactionDetails.subamount}</p>
                 <p>Fee: ${transactionDetails.transactionDetails.feesamount}</p>
                 <p>Biller: {transactionDetails.transactionDetails.recipient}</p>
               </div>
             </div>
             <div>
-              <label
-                htmlFor="pin"
-                className="block text-sm font-medium text-gray-700"
-              >
+              <label htmlFor="pin" className="block text-sm font-medium text-gray-700">
                 PIN
               </label>
               <input
@@ -283,21 +190,18 @@ export default function PaymentGateway() {
                 inputMode="numeric"
                 pattern="\d*"
                 required
+                autoFocus
                 value={pin}
                 onChange={(e) => setPin(e.target.value)}
-                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring focus:border-blue-500"
+                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md"
               />
             </div>
             <button
               type="submit"
               disabled={isLoading}
-              className="w-full flex justify-center py-2 px-4 rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300"
+              className="w-full py-2 px-4 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md"
             >
-              {isLoading ? (
-                <Loader className="animate-spin h-5 w-5" />
-              ) : (
-                "Pay Now"
-              )}
+              {isLoading ? <Loader className="animate-spin h-5 w-5" /> : "Pay Now"}
             </button>
           </form>
         );
@@ -306,17 +210,11 @@ export default function PaymentGateway() {
         return (
           <div className="text-center">
             <CheckCircle className="mx-auto h-12 w-12 text-green-500" />
-            <h3 className="mt-2 text-lg font-medium text-gray-900">
-              Payment Successful!
-            </h3>
-            <p className="mt-1 text-sm text-gray-500">
-              Your transaction was processed.
-            </p>
+            <h3 className="mt-2 text-lg font-medium text-gray-900">Payment Successful!</h3>
+            <p className="mt-1 text-sm text-gray-500">Your transaction was processed.</p>
             <button
-              onClick={() => {
-                window.location.href = "/";
-              }}
-              className="mt-6 inline-flex px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md"
+              onClick={() => (window.location.href = "/gateway")}
+              className="mt-6 px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md"
             >
               Close
             </button>
@@ -327,15 +225,11 @@ export default function PaymentGateway() {
         return (
           <div className="text-center">
             <AlertCircle className="mx-auto h-12 w-12 text-red-500" />
-            <h3 className="mt-2 text-lg font-medium text-gray-900">
-              Transaction Error
-            </h3>
-            <p className="mt-1 text-sm text-gray-500">
-              {error || "An unexpected error occurred."}
-            </p>
+            <h3 className="mt-2 text-lg font-medium text-gray-900">Transaction Error</h3>
+            <p className="mt-1 text-sm text-gray-500">{error || "An unexpected error occurred."}</p>
             <button
               onClick={() => window.location.reload()}
-              className="mt-6 inline-flex px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md"
+              className="mt-6 px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md"
             >
               Try Again
             </button>
@@ -350,9 +244,7 @@ export default function PaymentGateway() {
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
-        <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
-          Secure Payment Gateway
-        </h2>
+        <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">Secure Payment Gateway</h2>
         <p className="mt-2 text-center text-sm text-gray-600">
           Transaction ID: {transactionId || "Not found"}
         </p>

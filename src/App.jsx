@@ -1,10 +1,15 @@
-import PaymentGateway from './PaymentGateway';
+import PaymentGateway from "./PaymentGateway";
+import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 
 function App() {
   return (
-    <div className="App">
-      <PaymentGateway />
-    </div>
+    <Router>
+      <div className="App">
+        <Routes>
+          <Route path='/gateway' element={<PaymentGateway/>}/>
+        </Routes>
+      </div>
+    </Router>
   );
 }
 
