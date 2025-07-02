@@ -1,5 +1,5 @@
-import PaymentGateway from "./PaymentGateway";
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
+import PaymentGateway from "./pages/PaymentGateway";
 
 function App() {
   return (
