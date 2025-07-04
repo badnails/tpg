@@ -1,5 +1,5 @@
 
-const API_BASE_URL = "https://test-project-production-88cc.up.railway.app";
+const API_BASE_URL = "https://test-project-production-bf2e.up.railway.app";
 
 export const getTrxDetails = async (trxID) => {
   try {
